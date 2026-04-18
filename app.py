@@ -87,6 +87,49 @@ def solve_system(model_type, params, proc_mode, t_max, dt, init_val):
         
     return t, x
 
+def generate_latex(model_type, proc_mode, n, params):
+    k = params['k']
+    mu = params['mu']
+    p_max = params['p_max']
+    lam_total = params['lam_total']
+    lams_fixed = params['lams_fixed']
+    
+    latex_lines = []
+    for i in range(n):
+        # --- Arrival Term (Lambda) ---
+        if model_type == "Round Robin":
+            lam_term = f"\\frac{{{lam_total}}}{{{n}}}"
+        elif model_type == "Weighted Round Robin":
+            weights = p_max if proc_mode == "Saturated" else mu
+            total_w = np.sum(weights)
+            lam_term = f"\\frac{{{lam_total} \\cdot {weights[i]:.2f}}}{{{total_w:.2f}}}"
+        elif model_type == "Least Connections":
+            lam_term = f"{lam_total} \\cdot \\frac{{\\sum x_j - x_{{{i+1}}}}}{{\\sum x_j}}"
+        elif model_type == "Weighted Least Connections":
+            lam_term = f"{lam_total} \\cdot \\frac{{\\sum W_j - W_{{{i+1}}}}}{{\\sum W_j}}"
+        elif model_type == "Basic Model (Constant Rate)" or model_type == "Decoupled Static":
+            lam_term = f"{lams_fixed[i]:.2f}"
+        else:
+            lam_term = "\\lambda_i"
+
+        # --- Processing Term ---
+        if model_type == "Basic Model (Constant Rate)":
+            proc_term = f"{p_max[i]:.2f}"
+        elif proc_mode == "Saturated":
+            proc_term = f"{p_max[i]:.2f} \\left( \\frac{{x_{i+1}}}{{x_{i+1} + 1}} \\right)"
+        else:
+            proc_term = f"{mu[i]:.2f} x_{i+1}"
+
+        # --- Coupling Term ---
+        coupling_term = ""
+        if k > 0:
+            others = [f"x_{j+1}" for j in range(n) if j != i]
+            coupling_term = f" + {k:.2f}(" + " + ".join(others) + f" - {len(others)}x_{i+1})"
+
+        latex_lines.append(f"\\frac{{dx_{i+1}}}{{dt}} = {lam_term} - {proc_term}{coupling_term}")
+
+    return "\\begin{cases} " + " \\\\ ".join(latex_lines) + " \\end{cases}"
+
 # --- 3. STREAMLIT INTERFACE ---
 st.set_page_config(page_title="Server Load Balancer Lab", layout="wide")
 st.title("Server Load Balancing Simulation")
@@ -141,14 +184,25 @@ with st.sidebar:
             
             if not is_algorithmic:
                 lams_fixed[i] = st.slider(f"Arrival Rate $(\lambda_{i+1})$", 0.0, 10.0, 2.0)
-
+    
+    st.header("4. Simulation Settings")
     t_limit = st.number_input("Simulation Duration", value=100)
+
+    # add warning not to change dt this unless you know what you're doing
+    dt_set = st.number_input("Time Step (dt)", value=0.01, step=0.01)
+    st.warning("Changing the time step may affect simulation stability and accuracy. Default is 0.01.")
+
+
 
 # Run Simulation
 params = {'k': k_gain, 'mu': mu_vals, 'p_max': p_vals, 'lam_total': lam_total, 'lams_fixed': lams_fixed}
-t_series, data = solve_system(model_choice, params, proc_mode, t_limit, 0.01, np.ones(n_servers) * 2.0)
+t_series, data = solve_system(model_choice, params, proc_mode, t_limit, dt_set, np.ones(n_servers) * 2.0)
 
 # --- 4. PLOTTING ---
+st.subheader("System of Differential Equations")
+# Generate and display the LaTeX
+eq_latex = generate_latex(model_choice, proc_mode, n_servers, params)
+st.latex(eq_latex)
 col1, col2 = st.columns([2, 1])
 
 with col1:

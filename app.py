@@ -114,11 +114,11 @@ with st.sidebar:
 
     st.header("2. Global Parameters")
     if is_algorithmic:
-        lam_total = st.slider("Total Arrival (Λ)", 0.0, 15.0, 5.0)
+        lam_total = st.slider("Total Arrival $(\Lambda)$", 0.0, 15.0, 5.0)
     else:
         lam_total = 0.0
 
-    k_gain = st.slider("Coupling Gain (k)", 0.0, 2.0, 0.2)
+    k_gain = st.slider("Coupling Gain $(k)$", 0.0, 2.0, 0.2)
     
     st.header("3. Server Metrics")
     mu_vals = np.zeros(n_servers)
@@ -129,18 +129,18 @@ with st.sidebar:
         with st.expander(f"Server {i+1} Parameters"):
             # Hide mu if in Saturated mode or Basic Model
             if proc_mode == "Proportional" and model_choice != "Basic Model (Constant Rate)":
-                mu_vals[i] = st.slider(f"Processing Coeff (μ_{i+1})", 0.05, 2.0, 0.5)
+                mu_vals[i] = st.slider(f"Processing Coeff $(\mu_{i+1})$", 0.05, 2.0, 0.5)
             else:
                 mu_vals[i] = 1.0 # Default fallback
             
             # Hide p_max if in Proportional mode
             if proc_mode == "Saturated" or model_choice == "Basic Model (Constant Rate)":
-                p_vals[i] = st.slider(f"Max Processing Rate (p_{i+1})", 0.1, 10.0, 3.0)
+                p_vals[i] = st.slider(f"Max Processing Rate $(p_{i+1})$", 0.1, 10.0, 3.0)
             else:
                 p_vals[i] = 1.0 # Default fallback
             
             if not is_algorithmic:
-                lams_fixed[i] = st.slider(f"Arrival Rate (λ_{i+1})", 0.0, 10.0, 2.0)
+                lams_fixed[i] = st.slider(f"Arrival Rate $(\lambda_{i+1})$", 0.0, 10.0, 2.0)
 
     t_limit = st.number_input("Simulation Duration", value=100)
 

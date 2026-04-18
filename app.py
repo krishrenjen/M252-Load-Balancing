@@ -131,7 +131,7 @@ def generate_latex(model_type, proc_mode, n, params):
     return "\\begin{cases} " + " \\\\ ".join(latex_lines) + " \\end{cases}"
 
 # --- 3. STREAMLIT INTERFACE ---
-st.set_page_config(page_title="Server Load Balancer Lab", layout="wide")
+st.set_page_config(page_title="Server Load Balancing Simulation", layout="wide")
 st.title("Server Load Balancing Simulation")
 
 with st.sidebar:

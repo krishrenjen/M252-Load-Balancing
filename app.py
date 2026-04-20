@@ -2,7 +2,7 @@ import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 
-# --- 1. CORE PHYSICS ENGINE ---
+# model
 def get_derivatives(model_type, state, params, proc_mode):
     n = len(state)
     dxdt = np.zeros(n)
@@ -12,54 +12,48 @@ def get_derivatives(model_type, state, params, proc_mode):
     mu = params['mu']
     p_max = params['p_max']
     
-    # --- Step A: Calculate Arrival Rates (Lambda_i) ---
     lams = np.zeros(n)
     
-    # Algorithmic models use Global Lambda (Λ)
     if model_type in ["Round Robin", "Weighted Round Robin", "Least Connections", "Weighted Least Connections"]:
         lam_total = params['lam_total']
         
-        # In Saturated mode, we use p_max for weights; in Proportional, we use mu
+        # saturated or proportional
         weights = p_max if (proc_mode == "Saturated" or model_type == "Basic Model (Constant Rate)") else mu
         
         if model_type == "Round Robin":
-            # λ_i = Λ / n 
             lams = np.full(n, lam_total / n)
             
         elif model_type == "Weighted Round Robin":
-            # λ_i distributed by processing power 
             lams = lam_total * (weights / (np.sum(weights) + eps))
             
         elif model_type == "Least Connections":
-            # λ_i distributed to those with lower load x_i
             total_x = np.sum(state) + eps
             lams = lam_total * ((total_x - state) / ((n-1) * total_x + eps))
             
         elif model_type == "Weighted Least Connections":
-            # λ_i distributed by expected wait time W_i = x_i / capacity
             w = state / (weights + eps)
             total_w = np.sum(w) + eps
             lams = lam_total * ((total_w - w) / ((n-1) * total_w + eps))
     else: 
-        # Decoupled models use individual static arrival rates (λ_i)
+        # Decoupled models
         lams = params['lams_fixed']
 
-    # --- Step B: Calculate Processing and Coupling ---
+    # Calculate Processing and Coupling
     for i in range(n):
-        # 1. Basic Model: Uses Constant Rate p_i 
+        #Basic Model
         if model_type == "Basic Model (Constant Rate)":
             proc = p_max[i] if state[i] > 0 else 0
         
-        # 2. Advanced Models: Toggle between Proportional and Saturated
+        # Toggle between Proportional and Saturated
         else:
             if proc_mode == "Saturated":
-                # S(x) = x / (x + 1) 
+                #Saturated
                 proc = p_max[i] * (state[i] / (state[i] + 1))
             else:
-                # Proportional logic: mu * x 
+                # Proportional  
                 proc = mu[i] * state[i]
             
-        # Coupling (Work Stealing k): k * sum(x_j - x_i) 
+        # Coupling 
         coupling = 0
         for j in range(n):
             if i != j:
@@ -69,7 +63,7 @@ def get_derivatives(model_type, state, params, proc_mode):
         
     return dxdt
 
-# --- 2. NUMERICAL INTEGRATOR (RK4) ---
+# numerical integration (rk4)
 def solve_system(model_type, params, proc_mode, t_max, dt, init_val):
     n_steps = int(t_max / dt)
     n_servers = len(init_val)
@@ -82,11 +76,12 @@ def solve_system(model_type, params, proc_mode, t_max, dt, init_val):
         k2 = dt * get_derivatives(model_type, x[i] + k1/2, params, proc_mode)
         k3 = dt * get_derivatives(model_type, x[i] + k2/2, params, proc_mode)
         k4 = dt * get_derivatives(model_type, x[i] + k3, params, proc_mode)
-        # Apply max(0, x) constraint
+        
         x[i+1] = np.maximum(0, x[i] + (k1 + 2*k2 + 2*k3 + k4) / 6)
         
     return t, x
 
+# create latex to show diff eq system
 def generate_latex(model_type, proc_mode, n, params):
     k = params['k']
     mu = params['mu']
@@ -96,7 +91,6 @@ def generate_latex(model_type, proc_mode, n, params):
     
     latex_lines = []
     for i in range(n):
-        # --- Arrival Term (Lambda) ---
         if model_type == "Round Robin":
             lam_term = f"\\frac{{{lam_total}}}{{{n}}}"
         elif model_type == "Weighted Round Robin":
@@ -112,7 +106,6 @@ def generate_latex(model_type, proc_mode, n, params):
         else:
             lam_term = "\\lambda_i"
 
-        # --- Processing Term ---
         if model_type == "Basic Model (Constant Rate)":
             proc_term = f"{p_max[i]:.2f}"
         elif proc_mode == "Saturated":
@@ -120,7 +113,6 @@ def generate_latex(model_type, proc_mode, n, params):
         else:
             proc_term = f"{mu[i]:.2f} x_{i+1}"
 
-        # --- Coupling Term ---
         coupling_term = ""
         if k > 0:
             others = [f"x_{j+1}" for j in range(n) if j != i]
@@ -130,7 +122,7 @@ def generate_latex(model_type, proc_mode, n, params):
 
     return "\\begin{cases} " + " \\\\ ".join(latex_lines) + " \\end{cases}"
 
-# --- 3. STREAMLIT INTERFACE ---
+# set up stream lit interface
 st.set_page_config(page_title="Server Load Balancing Simulation", layout="wide")
 st.title("Server Load Balancing Simulation")
 
@@ -146,9 +138,8 @@ with st.sidebar:
     
     is_algorithmic = "Round Robin" in model_choice or "Connections" in model_choice
     
-    # Handle the mode and UI visibility
     if model_choice == "Basic Model (Constant Rate)":
-        proc_mode = "Saturated" # Forced logic
+        proc_mode = "Saturated" 
         st.info("Basic Model uses constant rates ($p_i$).")
     else:
         proc_mode = st.radio("Processing Mode", ["Proportional", "Saturated"], index=0)
@@ -198,13 +189,14 @@ with st.sidebar:
 params = {'k': k_gain, 'mu': mu_vals, 'p_max': p_vals, 'lam_total': lam_total, 'lams_fixed': lams_fixed}
 t_series, data = solve_system(model_choice, params, proc_mode, t_limit, dt_set, np.ones(n_servers) * 2.0)
 
-# --- 4. PLOTTING ---
+# plot graphs and latex
 st.subheader("System of Differential Equations")
-# Generate and display the LaTeX
+# latex display
 eq_latex = generate_latex(model_choice, proc_mode, n_servers, params)
 st.latex(eq_latex)
 col1, col2 = st.columns([2, 1])
 
+# load over time
 with col1:
     st.subheader("Load over Time")
     fig_ts, ax_ts = plt.subplots(figsize=(10, 5))
@@ -216,6 +208,7 @@ with col1:
     ax_ts.legend()
     st.pyplot(fig_ts)
 
+# phase portrait
 with col2:
     if n_servers == 2:
         st.subheader("Phase Portrait")
